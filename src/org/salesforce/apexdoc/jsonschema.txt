@@ -1,0 +1,34 @@
+
+main className: cModel.getTopmostClassName()
+cModel.getClassName()
+
+classSignature: escapeHTML
+
+Description: escapeHTML(cModel.getDescription())
+Author: escapeHTML(cModel.getAuthor())
+Date: escapeHTML(cModel.getDate())
+
+
+Properties:
+- For prop in cModel.getPropertiesSorted()
+    - prop name: prop.getPropertyName()
+    - prop nameline: prop.getNameLine()
+    - prop description: prop.getDescription()
+
+
+Methods:
+- For method in cModel.getMethodsSorted()
+    - method name: method.getMethodName()
+    - method nameline: method.getNameLine()
+    - method description: method.getDescription()
+    - param in method.getParams()
+        - (see code for more details!) -> paramName, paramDescription
+    - Return type: 
+
+Command to build:
+mvn clean compile assembly:single
+
+cd into target
+
+Command to run:
+java -cp ApexDoc-1.2.0-SNAPSHOT-jar-with-dependencies.jar org.salesforce.apexdoc.ApexDoc -s /Users/mridulmahesh/Desktop/testplmdocs/input -t /Users/mridulmahesh/Desktop/testplmdocs/output

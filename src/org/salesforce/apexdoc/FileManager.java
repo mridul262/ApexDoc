@@ -9,15 +9,21 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.json.simple.JSONObject;
+import org.json.simple.JSONArray;
 
 public class FileManager {
     FileOutputStream fos;
     DataOutputStream dos;
     String path;
+    String jsonPath;
+    String htmlPath;
     public String header;
     public String APEX_DOC_PATH = "";
     public StringBuffer infoMessages;
@@ -52,17 +58,18 @@ public class FileManager {
 
     private boolean createHTML(TreeMap<String, String> mapFNameToContent, IProgressMonitor monitor) {
         try {
+            htmlPath = path;
             if (path.endsWith("/") || path.endsWith("\\")) {
-                path += Constants.ROOT_DIRECTORY; // + "/" + fileName + ".html";
+                htmlPath += Constants.ROOT_DIRECTORY + "/html"; // + "/" + fileName + ".html";
             } else {
-                path += "/" + Constants.ROOT_DIRECTORY; // + "/" + fileName + ".html";
+                htmlPath += "/" + Constants.ROOT_DIRECTORY + "/html"; // + "/" + fileName + ".html";
             }
 
-            (new File(path)).mkdirs();
+            (new File(htmlPath)).mkdirs();
 
             for (String fileName : mapFNameToContent.keySet()) {
                 String contents = mapFNameToContent.get(fileName);
-                fileName = path + "/" + fileName + ".html";
+                fileName = htmlPath + "/" + fileName + ".html";
                 File file = new File(fileName);
                 fos = new FileOutputStream(file);
                 dos = new DataOutputStream(fos);
@@ -74,7 +81,37 @@ public class FileManager {
                 if (monitor != null)
                     monitor.worked(1);
             }
-            copy(path);
+            copy(htmlPath);
+            return true;
+        } catch (Exception e) {
+
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+    private boolean createJSON(TreeMap<String, JSONObject> mapFNameToJSON, IProgressMonitor monitor) {
+        try {
+            jsonPath = path;
+            if (path.endsWith("/") || path.endsWith("\\")) {
+                jsonPath += Constants.ROOT_DIRECTORY + "/json"; // + "/" + fileName + ".html";
+            } else {
+                jsonPath += "/" + Constants.ROOT_DIRECTORY + "/json"; // + "/" + fileName + ".html";
+            }
+
+            (new File(jsonPath)).mkdirs();
+
+            for (String fileName : mapFNameToJSON.keySet()) {
+                JSONObject contents = mapFNameToJSON.get(fileName);
+                fileName = jsonPath + "/" + fileName + ".json";
+                Files.write(Paths.get(fileName), contents.toJSONString().getBytes());
+                infoMessages.append(fileName + " Processed...\n");
+                System.out.println(fileName + " Processed...");
+                if (monitor != null)
+                    monitor.worked(1);
+            }
+            // copy(path);
             return true;
         } catch (Exception e) {
 
@@ -113,6 +150,7 @@ public class FileManager {
      */
     private void makeFile(TreeMap<String, ClassGroup> mapGroupNameToClassGroup, ArrayList<ClassModel> cModels,
             String projectDetail, String homeContents, String hostedSourceURL, IProgressMonitor monitor) {
+        System.out.println("makeFile called");
         String links = "<table width='100%'>";
         links += strHTMLScopingPanel();
         links += "<tr style='vertical-align:top;' >";
@@ -130,18 +168,25 @@ public class FileManager {
         String fileName = "";
         TreeMap<String, String> mapFNameToContent = new TreeMap<String, String>();
         mapFNameToContent.put("index", homeContents);
-
+        TreeMap<String, JSONObject> mapFNameToJSON = new TreeMap<String, JSONObject>();
         // create our Class Group content files
         createClassGroupContent(mapFNameToContent, links, projectDetail, mapGroupNameToClassGroup, cModels, monitor);
-
+        System.out.println("before cModel loop");
         for (ClassModel cModel : cModels) {
             String contents = links;
+            JSONObject contentJSON = new JSONObject();
+            try {
+                contentJSON = createJSON(cModel);
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
             if (cModel.getNameLine() != null && cModel.getNameLine().length() > 0) {
                 fileName = cModel.getClassName();
                 contents += "<td class='contentTD'>";
 
                 contents += htmlForClassModel(cModel, hostedSourceURL);
-
+                
                 // deal with any nested classes
                 for (ClassModel cmChild : cModel.getChildClassesSorted()) {
                     contents += "<p/>";
@@ -154,11 +199,85 @@ public class FileManager {
             contents += "</div>";
 
             contents = Constants.getHeader(projectDetail) + contents + Constants.FOOTER;
+            mapFNameToJSON.put(fileName, contentJSON);
             mapFNameToContent.put(fileName, contents);
             if (monitor != null)
                 monitor.worked(1);
         }
+        createJSON(mapFNameToJSON, monitor);
         createHTML(mapFNameToContent, monitor);
+    }
+
+
+    private static JSONObject createJSON(ClassModel cModel) throws IOException{
+        System.out.println("inside Create JSON");
+        JSONObject returnObject = new JSONObject();
+        System.out.println("inside Create JSON 1");
+        returnObject.put("topMostClassName", cModel.getTopmostClassName());
+        returnObject.put("className", cModel.getClassName());
+        returnObject.put("classSignature", escapeHTML(cModel.getNameLine()));
+        returnObject.put("description", escapeHTML(cModel.getDescription()));
+        returnObject.put("author", escapeHTML(cModel.getAuthor()));
+        returnObject.put("date", escapeHTML(cModel.getDate()));
+        
+        JSONArray properties = new JSONArray();
+        if (cModel.getProperties().size() > 0) {
+            for(PropertyModel prop : cModel.getPropertiesSorted()){
+                JSONObject propObject = new JSONObject();
+                propObject.put("name", prop.getPropertyName());
+                propObject.put("nameline", prop.getNameLine());
+                propObject.put("description", prop.getDescription());
+                properties.add(propObject);
+            }
+        }
+        System.out.println("inside Create JSON 2");
+        returnObject.put("properties", properties);
+
+        JSONArray methods = new JSONArray();
+        if (cModel.getMethods().size() > 0){
+            for(MethodModel method : cModel.getMethodsSorted()){
+                JSONObject methodObject = new JSONObject();
+                methodObject.put("name", method.getMethodName());
+                methodObject.put("nameline", method.getNameLine());
+                methodObject.put("description", method.getDescription());
+                
+                System.out.println("inside Create JSON 3");
+                JSONArray params = new JSONArray();
+                if (method.getParams().size() > 0) {
+                    for (String param : method.getParams()){
+                        param = escapeHTML(param);
+                        JSONObject paramObject = new JSONObject();
+                        if (param != null && param.trim().length() > 0) {
+                            Pattern p = Pattern.compile("\\s");
+                            Matcher m = p.matcher(param);
+
+                            String paramName;
+                            String paramDescription;
+                            if (m.find()) {
+                            	int ich = m.start();
+                                paramName = param.substring(0, ich);
+                                paramDescription = param.substring(ich + 1);
+                            } else {
+                                paramName = param;
+                                paramDescription = null;
+                            }
+                            paramObject.put("name", paramName);
+                            paramObject.put("description", paramDescription);
+                            params.add(paramObject);
+                        }
+                    }
+                }
+                System.out.println("inside Create JSON 4");
+                methodObject.put("parameters", params);
+                methods.add(methodObject);
+            }
+        }
+
+        returnObject.put("methods", methods);
+
+        return returnObject;
+        // System.out.println("preparing json");
+        // Files.write(Paths.get("output.json"), returnObject.toJSONString().getBytes());
     }
 
     /*********************************************************************************************

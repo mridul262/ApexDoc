@@ -115,7 +115,8 @@ public class ApexDoc {
 
         // create our Groups
         TreeMap<String, ClassGroup> mapGroupNameToClassGroup = createMapGroupNameToClassGroup(cModels, sourceDirectory);
-
+        // System.out.println("classGroup: " + ((ClassGroup) (mapGroupNameToClassGroup.values().toArray()[0])).getContentFilename());
+        System.out.println("cModel: " + cModels.get(0).getClassGroupContent());
         // load up optional specified file templates
         String projectDetail = fm.parseHTMLFile(authorfilepath);
         if (monitor != null)
